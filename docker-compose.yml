@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  egasis-studio:
+    build: .
+    container_name: egasis_studio
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./outreach.db:/app/outreach.db
+    env_file:
+      - .env
+    environment:
+      - PORT=8000

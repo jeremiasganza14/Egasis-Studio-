@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Egasis Studio - Lead Gen SaaS</title>
+    <link rel="stylesheet" href="/static/css/styles.css?v=5">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="logo" style="display: flex; align-items: center; gap: 10px; margin-bottom: 30px;">
+                <img src="/static/logo.png" alt="ES" style="height: 38px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="display: flex; flex-direction: column;">
+                    <span style="font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.15rem; letter-spacing: 1px; color: #fff; line-height: 1;">EGASIS</span>
+                    <span class="badge" style="background: rgba(0, 245, 212, 0.15); color: #00f5d4; border: 1px solid rgba(0, 245, 212, 0.2); font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: 600; width: fit-content; margin-top: 3px; letter-spacing: 0.5px;">STUDIO</span>
+                </div>
+            </div>
+            <nav>
+                <a href="#" class="active" data-target="dashboard">
+                    <span>📊</span> Dashboard
+                </a>
+                <a href="#" data-target="inbox">
+                    <span>📥</span> Inbox IA
+                </a>
+                <a href="#" data-target="meetings">
+                    <span>🤝</span> Reuniones & Demos
+                </a>
+                <a href="#" data-target="learnings">
+                    <span>📓</span> Bitácora & Log
+                </a>
+                <a href="#" data-target="settings">
+                    <span>🧠</span> Configuración
+                </a>
+            </nav>
+            <div class="bot-control">
+                <p>Estado General del Sistema</p>
+                <div class="status-indicator" id="bot-status-indicator"></div>
+                <span id="bot-status-text">Detenido</span>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- DASHBOARD SECTION -->
+            <section id="dashboard" class="view-section active">
+                <header>
+                    <h1>Resumen de Campañas (Prospección SaaS)</h1>
+                    <p>Monitoreo en tiempo real de los agentes autónomos de prospección.</p>
+                </header>
+
+                <div class="metrics-grid">
+                    <div class="metric-card glass-panel clickable-card" id="card-sent-today">
+                        <h3>Enviados Hoy</h3>
+                        <div class="value"><span id="metric-sent">0</span> / <span id="metric-limit">80</span></div>
+                        <div class="progress-bar"><div class="fill" id="bar-sent" style="width: 0%;"></div></div>
+                    </div>
+                    <div class="metric-card glass-panel clickable-card" id="card-interested-leads">
+                        <h3>Leads Interesados</h3>
+                        <div class="value" id="metric-total">0</div>
+                    </div>
+                    <div class="metric-card glass-panel clickable-card" id="card-total-contacted">
+                        <h3>Total Contactados</h3>
+                        <div class="value" id="metric-replies">0</div>
+                    </div>
+                </div>
+
+                <h2>Red de Agentes Activos</h2>
+                <div class="agents-grid">
+                    <div class="agent-card glass-panel" id="agent-scout" onclick="openAgentModal('scout')" style="cursor:pointer;">
+                        <div class="agent-icon">🕵️‍♂️</div>
+                        <h4>Agente Scout</h4>
+                        <p>Busca prospectos y extrae correos en frío.</p>
+                        <span class="status-dot">Activo</span>
+                    </div>
+                    <div class="agent-card glass-panel" id="agent-closer" onclick="openAgentModal('closer')" style="cursor:pointer;">
+                        <div class="agent-icon">💬</div>
+                        <h4>Agente Closer</h4>
+                        <p>Negocia citas y propone horarios.</p>
+                        <span class="status-dot">Activo</span>
+                    </div>
+                    <div class="agent-card glass-panel inactive" id="agent-prep" onclick="openAgentModal('prep')" style="cursor:pointer;">
+                        <div class="agent-icon">📊</div>
+                        <h4>Agente Preparador</h4>
+                        <p>Diseña Call Briefs y PowerPoints.</p>
+                        <span class="status-dot">Espera</span>
+                    </div>
+                    <div class="agent-card glass-panel inactive" id="agent-dev" onclick="openAgentModal('dev')" style="cursor:pointer;">
+                        <div class="agent-icon">💻</div>
+                        <h4>Agente Desarrollador</h4>
+                        <p>Estructura código y maquetas.</p>
+                        <span class="status-dot">Espera</span>
+                    </div>
+                    <div class="agent-card glass-panel" id="agent-ceo" onclick="openAgentModal('ceo')" style="cursor:pointer;">
+                        <div class="agent-icon">👑</div>
+                        <h4>CEO Supervisor</h4>
+                        <p>Supervisa la consistencia del flujo.</p>
+                        <span class="status-dot">Activo</span>
+                    </div>
+                </div>
+
+                <!-- Modales de Agentes -->
+                <div id="agent-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center;">
+                    <div class="glass-panel" style="width: 600px; max-width:90%; padding: 32px; position:relative;">
+                        <button onclick="closeAgentModal()" class="btn btn-danger" style="position:absolute; top:16px; right:16px;">X</button>
+                        <h2 id="modal-title">Agente</h2>
+                        <div id="modal-content" class="mt-2" style="max-height:400px; overflow-y:auto; line-height:1.6;">
+                            Cargando...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- El botón de Lanzar Campaña se ha eliminado porque el bot ahora opera 100% por cronjob automático a las 8 AM basado en la Cola de Búsqueda -->
+
+                <!-- TERMINAL EN VIVO -->
+                <div class="terminal-wrapper mt-4">
+                    <h2>Terminal en Vivo</h2>
+                    <div class="terminal-box mt-2" id="terminal-output">
+                        <div class="log-line">Esperando comandos para iniciar...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- INBOX SECTION -->
+            <section id="inbox" class="view-section" style="display: none;">
+                <header>
+                    <h1>Inbox Clasificado por IA</h1>
+                    <p>Monitoreo inteligente de correos recibidos y su clasificación automática.</p>
+                </header>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>Respuestas Recientes</h2>
+                    <button id="btn-sync-inbox" class="btn btn-secondary">🔄 SINCRONIZAR GMAIL</button>
+                </div>
+                <div class="glass-panel mt-2 p-0 table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>De</th>
+                                <th>Asunto</th>
+                                <th>Clasificación</th>
+                                <th>Prioridad</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="replies-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- MEETINGS & DEMOS SECTION -->
+            <section id="meetings" class="view-section" style="display: none;">
+                <header>
+                    <h1>Reuniones, PPTX y Maquetas</h1>
+                    <p>Genera briefs de ventas, presentaciones en PowerPoint y plantillas de proyecto con un clic.</p>
+                </header>
+                <h2>Leads de Interés</h2>
+                <div class="glass-panel mt-2 p-0 table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Empresa</th>
+                                <th>Email</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="meetings-tbody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Brief Visualizer -->
+                <div id="brief-display-section" style="display: none;" class="mt-4">
+                    <h2>Call Brief de IA: <span id="brief-company-title">Cargando...</span></h2>
+                    <div class="brief-container glass-panel mt-2" id="brief-content-box">
+                        Cargando análisis de la clínica...
+                    </div>
+                </div>
+            </section>
+
+            <!-- LEARNINGS SECTION -->
+            <section id="learnings" class="view-section" style="display: none;">
+                <header>
+                    <h1>Bitácora de la Agencia</h1>
+                    <p>Historial de lecciones comerciales extraídas automáticamente por la IA desde las respuestas de clientes.</p>
+                </header>
+
+                <div class="glass-panel p-4" style="background: rgba(30, 20, 50, 0.5); border-color: var(--primary);">
+                    <h3 style="color: var(--primary);">🤖 Registro Autónomo Activado</h3>
+                    <p class="text-sm mt-2" style="line-height:1.5;">La Inteligencia Artificial (Gemini) está analizando todos los correos entrantes y extrayendo conclusiones automáticamente.<br>Estas lecciones se usan en tiempo real para mejorar la redacción de futuros correos de prospección. Ya no necesitas registrar notas manualmente.</p>
+                </div>
+
+                <h2 class="mt-4">Historial de Aprendizajes Semanales</h2>
+                <div class="learnings-wrapper" id="learnings-list">
+                    <!-- Cards de bitácora -->
+                </div>
+            </section>
+
+            <!-- SETTINGS SECTION -->
+            <section id="settings" class="view-section" style="display: none;">
+                <header>
+                    <h1>Configuración del Cerebro</h1>
+                    <p>Edita la estrategia de prospección, disponibilidad horaria y plantillas de email.</p>
+                </header>
+
+                <div class="glass-panel p-4">
+                    <div class="settings-container" style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px;">
+                        <!-- Columna Izquierda: Formulario -->
+                        <div class="settings-form-col">
+                            <div class="form-group">
+                                <label for="settings-queue">Cola de Búsqueda (Cronjob 8:00 AM)</label>
+                                <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">Escribe un término de búsqueda por línea. El Agente Scout buscará la siguiente ubicación cada mañana a las 8 AM.</p>
+                                <textarea id="settings-queue" placeholder="Agencias de marketing en Madrid&#10;Agencias SEO en Barcelona&#10;Desarrolladores web en Valencia"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="settings-availability">Mi Disponibilidad (Opciones propuestas por el Closer)</label>
+                                <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">Escribe las opciones de días y horas que el Closer le ofrecerá al cliente cuando muestre interés (una por línea).</p>
+                                <textarea id="settings-availability" placeholder="Lunes a las 11:00&#10;Miércoles a las 16:00&#10;Jueves a las 15:30"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="settings-meeting-link">Enlace de la Videollamada (Google Meet / Zoom / Calendly)</label>
+                                <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">El enlace que se le enviará automáticamente al prospecto en el correo de confirmación final.</p>
+                                <input type="text" id="settings-meeting-link" style="width: 100%; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(18, 16, 28, 0.4); color: #fff; outline: none; font-size: 0.95rem;" placeholder="https://meet.google.com/xxx-yyyy-zzz">
+                            </div>
+
+                            <div class="form-group">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <label for="settings-template-subject" style="margin-bottom:0;">Asunto del Correo (Spintax & Variables)</label>
+                                    <div class="insert-buttons" style="display: flex; gap: 6px;">
+                                        <button type="button" class="btn-insert-tag" data-target="settings-template-subject" data-val="{Empresa}" style="background: rgba(0, 245, 212, 0.15); border: 1px solid var(--secondary); color:#00f5d4; padding: 2px 8px; font-size: 0.7rem; border-radius: 4px; cursor: pointer; font-weight:600;">+ Empresa</button>
+                                    </div>
+                                </div>
+                                <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">El asunto del correo. Admite spintax como <code>{Hola|Estimado}</code> y variables como <code>{Empresa}</code>.</p>
+                                <input type="text" id="settings-template-subject" style="width: 100%; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(18, 16, 28, 0.4); color: #fff; outline: none; font-size: 0.95rem;" placeholder="{Reuniones en automático para {Empresa}|Automatizar prospección B2B}">
+                            </div>
+
+                            <div class="form-group">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <label for="settings-template-body" style="margin-bottom:0;">Cuerpo HTML Base del Correo</label>
+                                    <div class="insert-buttons" style="display: flex; gap: 6px;">
+                                        <button type="button" class="btn-insert-tag" data-target="settings-template-body" data-val="{Nombre}" style="background: rgba(0, 245, 212, 0.15); border: 1px solid var(--secondary); color:#00f5d4; padding: 2px 8px; font-size: 0.7rem; border-radius: 4px; cursor: pointer; font-weight:600;">+ Nombre</button>
+                                        <button type="button" class="btn-insert-tag" data-target="settings-template-body" data-val="{Empresa}" style="background: rgba(0, 245, 212, 0.15); border: 1px solid var(--secondary); color:#00f5d4; padding: 2px 8px; font-size: 0.7rem; border-radius: 4px; cursor: pointer; font-weight:600;">+ Empresa</button>
+                                    </div>
+                                </div>
+                                <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">Plantilla HTML base del correo en frío. Admite variables como <code>{Nombre}</code> y <code>{Empresa}</code>.</p>
+                                <textarea id="settings-template-body" style="height: 250px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;" placeholder="Cuerpo HTML..."></textarea>
+                            </div>
+
+                            <button id="btn-save-settings" class="btn btn-primary" style="width: 100%;">GUARDAR CONFIGURACIÓN</button>
+                        </div>
+
+                        <!-- Columna Derecha: Vista Previa en Vivo -->
+                        <div class="settings-preview-col" style="border-left: 1px solid var(--border); padding-left: 32px;">
+                            <h3 style="color: var(--secondary); margin-bottom: 12px; font-weight: 700; display: flex; align-items: center; gap: 8px;">📧 Previsualización en Vivo</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 24px;">Así es como verá tu correo un cliente mock (ej. Juan de Clínica Dental Sonrisas):</p>
+                            
+                            <div class="email-preview-box" style="background: rgba(9, 8, 14, 0.6); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); font-family: 'Inter', sans-serif;">
+                                <div style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px; font-size: 0.85rem; line-height: 1.6;">
+                                    <div style="margin-bottom: 4px;"><span style="color: var(--text-muted); font-weight:600;">De:</span> Jeremías &lt;ventas@egasis.studio&gt;</div>
+                                    <div style="margin-bottom: 4px;"><span style="color: var(--text-muted); font-weight:600;">Para:</span> juan@clinicasonrisas.com</div>
+                                    <div><span style="color: var(--text-muted); font-weight:600;">Asunto:</span> <span id="preview-subject" style="font-weight: 600; color: #fff;"></span></div>
+                                </div>
+                                <div id="preview-body" style="font-size: 0.9rem; line-height: 1.6; color: var(--text-main); min-height: 200px; max-height: 400px; overflow-y: auto; white-space: pre-wrap;">
+                                    <!-- Rendered HTML here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <!-- Modal Directorio de Contactados -->
+    <div id="modal-contacted-leads" class="custom-modal-overlay" style="display: none;">
+        <div class="glass-panel custom-modal-content">
+            <button class="custom-modal-close" id="close-modal-contacted">✕</button>
+            <h2 style="margin-bottom: 20px; font-weight: 800; background: linear-gradient(90deg, #fff, #c77dff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Directorio de Empresas Contactadas</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">Lista histórica de todas las clínicas encontradas y su estado actual en la campaña.</p>
+            <div class="glass-panel p-0 table-container" style="max-height: 50vh; overflow-y: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Empresa</th>
+                            <th>Email</th>
+                            <th>Estado</th>
+                            <th>Fecha Contactado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contacted-leads-tbody">
+                        <tr><td colspan="4" style="text-align:center; padding: 20px;">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Aprobación de Respuesta (Copiloto) -->
+    <div id="modal-reply-approval" class="custom-modal-overlay" style="display: none;">
+        <div class="glass-panel custom-modal-content" style="max-width: 700px;">
+            <button class="custom-modal-close" id="close-modal-reply">✕</button>
+            <h2 style="margin-bottom: 10px; font-weight: 800; background: linear-gradient(90deg, #fff, #00f5d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Aprobación de Respuesta IA</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Revisa y edita la respuesta propuesta por Egasis antes de que sea enviada.</p>
+            
+            <div class="glass-panel p-4 mb-4" style="background: rgba(9, 8, 14, 0.4); border-color: rgba(255,255,255,0.05);">
+                <div style="font-weight: 600; font-size: 0.85rem; color: var(--primary); margin-bottom: 4px;">Mensaje Recibido del Prospecto:</div>
+                <div id="approval-original-body" style="font-size: 0.9rem; max-height: 150px; overflow-y: auto; white-space: pre-wrap; color: var(--text-muted); padding: 8px 0;">
+                    Cargando mensaje...
+                </div>
+            </div>
+
+            <input type="hidden" id="approval-reply-id">
+
+            <!-- Controles de Clasificación y Estado -->
+            <div style="display: flex; gap: 16px; margin-bottom: 20px;">
+                <div class="modal-form-group" style="flex: 1; margin-bottom: 0;">
+                    <label for="approval-classification" style="display:block; margin-bottom:6px; font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">Clasificación de IA</label>
+                    <select id="approval-classification" style="width: 100%; padding: 12px; background: rgba(9, 8, 14, 0.6); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); outline: none; font-size:0.9rem; cursor:pointer;">
+                        <option value="interested">Interesado</option>
+                        <option value="info_requested">Pide Información</option>
+                        <option value="not_interested">No Interesado</option>
+                        <option value="unsubscribe">Baja / Desuscribir</option>
+                        <option value="out_of_office">Fuera de la Oficina</option>
+                        <option value="spam">Spam / Publicitario</option>
+                        <option value="unclassified">Sin Clasificar</option>
+                    </select>
+                </div>
+                <div class="modal-form-group" style="flex: 1; margin-bottom: 0;">
+                    <label for="approval-lead-status" style="display:block; margin-bottom:6px; font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">Estado del Lead</label>
+                    <select id="approval-lead-status" style="width: 100%; padding: 12px; background: rgba(9, 8, 14, 0.6); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); outline: none; font-size:0.9rem; cursor:pointer;">
+                        <option value="esperando_aprobacion">Espera Aprobación</option>
+                        <option value="negociando_horario">Negociando Horario</option>
+                        <option value="agendado">Reunión Agendada</option>
+                        <option value="listo_para_demo">Listo para Demo</option>
+                        <option value="rechazado">Rechazado</option>
+                        <option value="do_not_contact">No Contactar</option>
+                        <option value="replied">Respondido</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="modal-form-group">
+                <label for="approval-subject">Asunto del Correo de Respuesta</label>
+                <input type="text" id="approval-subject" placeholder="Ej. Re: Cita de demostración">
+            </div>
+
+            <div class="modal-form-group">
+                <label for="approval-body">Cuerpo del Correo a Enviar</label>
+                <textarea id="approval-body" rows="8" placeholder="Escribe el cuerpo de tu respuesta aquí..."></textarea>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                <button id="btn-approval-dismiss" class="btn btn-danger" style="background: rgba(255, 90, 95, 0.2); color: var(--danger); border: 1px solid var(--danger);">🗑️ DESCARTAR / IGNORAR</button>
+                <button id="btn-approval-send" class="btn btn-secondary">🚀 APROBAR Y ENVIAR</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js?v=5"></script>
+</body>
+</html>
