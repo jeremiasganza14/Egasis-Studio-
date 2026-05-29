@@ -39,11 +39,31 @@ def bot_loop():
             with db_lock:
                 db = SessionLocal()
                 status = get_setting(db, "bot_status", "stopped")
-                work_start = int(get_setting(db, "work_hour_start", os.getenv("WORK_HOUR_START", "8")))
-                work_end = int(get_setting(db, "work_hour_end", os.getenv("WORK_HOUR_END", "18")))
+                
+                # Nuevas variables de horario
+                schedule_24_7 = get_setting(db, "schedule_24_7", "true") == "true"
+                schedule_start = get_setting(db, "schedule_start", "09:00")
+                schedule_end = get_setting(db, "schedule_end", "18:00")
                 daily_limit = int(get_setting(db, "daily_limit", os.getenv("DAILY_LIMIT", "80")))
                 
                 today = datetime.date.today()
+                now_time = datetime.datetime.now().time()
+                
+                # Parsing hours
+                try:
+                    start_h, start_m = map(int, schedule_start.split(":"))
+                    end_h, end_m = map(int, schedule_end.split(":"))
+                    time_start = datetime.time(start_h, start_m)
+                    time_end = datetime.time(end_h, end_m)
+                except:
+                    time_start = datetime.time(8, 0)
+                    time_end = datetime.time(18, 0)
+                
+                if time_start <= time_end:
+                    is_working_hours = schedule_24_7 or (time_start <= now_time <= time_end)
+                else:
+                    is_working_hours = schedule_24_7 or (now_time >= time_start or now_time <= time_end)
+                
                 # Contar correos enviados hoy
                 sent_today = db.query(SentEmail).filter(
                     SentEmail.sent_at >= datetime.datetime(today.year, today.month, today.day)
@@ -61,39 +81,71 @@ def bot_loop():
                 wlog("[SYSTEM] 🛑 Bot detenido desde configuración.")
                 break
                 
-            # 2. Comprobar horario de trabajo
-            current_hour = datetime.datetime.now().hour
-            if current_hour < work_start or current_hour >= work_end:
-                wlog(f"[CLOSER] ⏳ Fuera del horario laboral ({work_start}:00 - {work_end}:00). En espera...")
-                time.sleep(600)
-                continue
+            # KILL SWITCH CHECK (Licencia)
+            # Verifica la licencia solo 1 vez por día, para no saturar internet
+            with db_lock:
+                db = SessionLocal()
+                license_status = get_setting(db, "license_status", "active")
+                last_license_check = get_setting(db, "last_license_check", "0")
+                db.close()
                 
-            # 3. Comprobar límite diario
-            if sent_today >= daily_limit:
-                wlog(f"[CLOSER] ✅ Límite diario alcanzado ({sent_today}/{daily_limit}). Durmiendo hasta mañana...")
-                time.sleep(3600)
-                continue
+            if license_status == "revoked":
+                wlog("🛑 LICENCIA REVOCADA. Contacte con el proveedor. El bot ha sido detenido.")
+                is_running = False
+                with db_lock:
+                    db = SessionLocal()
+                    set_setting(db, "bot_status", "stopped")
+                    db.close()
+                break
                 
-            # 4. Chequeo IMAP (cada 15 minutos aprox, no bloquea BD)
-            if time.time() - last_imap_check > 900:
-                wlog("[CLOSER] 🔍 Revisando respuestas recibidas en Gmail (IMAP)...")
+            # Simulamos el check online (puedes cambiar esta URL a tu propio JSON de GitHub)
+            now_ts = int(time.time())
+            if now_ts - int(last_license_check) > 86400: # 24 horas
+                try:
+                    import requests
+                    # URL de ejemplo (Kill Switch). Deberías crear un gist en github o un json en vercel
+                    # Ej: {"status": "active"} o {"status": "revoked"}
+                    # Por ahora lo validamos como "active" siempre si la URL no existe
+                    # res = requests.get("https://tu-servidor.com/licencias/cliente_123.json", timeout=5)
+                    # data = res.json()
+                    # status = data.get("status", "active")
+                    # if status == "revoked":
+                    #     with db_lock:
+                    #         db = SessionLocal()
+                    #         set_setting(db, "license_status", "revoked")
+                    #         db.close()
+                    #     continue
+                    pass
+                except Exception:
+                    pass
+                with db_lock:
+                    db = SessionLocal()
+                    set_setting(db, "last_license_check", str(now_ts))
+                    db.close()
+                
+            # 2. Chequeo IMAP (cada 5 minutos aprox, no bloquea BD)
+            if time.time() - last_imap_check > 300:
+                wlog("[SYSTEM] ⚙️ Motor activo: Escaneando nuevas respuestas y buscando prospectos...")
                 try:
                     check_replies()
                 except Exception as check_ex:
                     wlog(f"[SYSTEM] ⚠️ Error en chequeo IMAP: {check_ex}")
                 last_imap_check = time.time()
+
+            # 3. Comprobar límite diario y horario para nuevos correos
+            if sent_today >= daily_limit:
+                time.sleep(120)
+                continue
                 
-            # 5. Si no hay lead, buscar de la cola de ciudades
+            if not is_working_hours:
+                time.sleep(60)
+                continue
+                
+            # 4. Si no hay lead, buscar de la cola de ciudades
             if not lead:
                 if not search_queue_str.strip():
                     wlog("[SYSTEM] 💤 No hay leads pendientes y la cola de búsqueda está vacía. En espera...")
                     time.sleep(60)
-                    continue
-                
-                # Permitir avanzar en la cola si aún no hemos alcanzado el límite diario de envíos
-                if sent_today >= daily_limit:
-                    wlog(f"[CLOSER] ⏳ Límite de envíos diario alcanzado. Esperando...")
-                    time.sleep(1800)
                     continue
                 
                 queue = [q.strip() for q in search_queue_str.split('\n') if q.strip()]

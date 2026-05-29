@@ -94,200 +94,135 @@ document.addEventListener("DOMContentLoaded", () => {
     async function fetchReplies() {
         const res = await fetch("/api/replies");
         currentReplies = await res.json();
-        const tbody = document.getElementById("replies-tbody");
-        tbody.innerHTML = "";
+        const feed = document.getElementById("replies-feed");
+        if (!feed) return;
+        feed.innerHTML = "";
+        
+        if (currentReplies.length === 0) {
+            feed.innerHTML = `<div class="glass-panel p-4 text-center text-sm" style="color: var(--text-muted);">No hay correos en la bandeja de entrada.</div>`;
+            return;
+        }
         
         currentReplies.forEach(reply => {
-            const tr = document.createElement("tr");
-            let clsfClass = reply.classification === 'interested' ? 'replied' : 
-                            reply.classification === 'not_interested' ? 'failed' : 'pending';
+            const card = document.createElement("div");
+            card.className = "glass-panel p-4";
+            card.style.display = "flex";
+            card.style.flexDirection = "column";
+            card.style.gap = "16px";
+            card.style.position = "relative";
+            card.style.overflow = "hidden";
             
-            const gmailSearchUrl = `https://mail.google.com/mail/#search/from%3A${encodeURIComponent(reply.from_email)}`;
-            
-            let actionHtml = "";
-            if (reply.processed_status === 'pending_approval') {
-                actionHtml = `<button class="btn btn-secondary btn-sm btn-review-reply" data-id="${reply.id}">Revisar</button>`;
-            } else if (reply.processed_status === 'replied') {
-                actionHtml = `<span style="color: var(--success); font-size: 0.85rem; font-weight: 600;">Enviada</span>`;
-            } else if (reply.processed_status === 'read') {
-                actionHtml = `<span style="color: var(--text-muted); font-size: 0.85rem;">Ignorada</span>`;
-            } else {
-                actionHtml = `<span style="color: var(--text-muted); font-size: 0.85rem;">—</span>`;
-            }
-            actionHtml = `
-                <div class="flex-actions">
-                    ${actionHtml}
-                    <button class="btn-delete-subtle btn-delete-lead" data-lead-id="${reply.lead_id}" title="Eliminar prospecto">✕</button>
+            // Efecto de brillo sutil según clasificación
+            const glowColor = reply.classification === 'interested' ? "rgba(56, 176, 0, 0.15)" : 
+                              reply.classification === 'not_interested' ? "rgba(255, 90, 95, 0.15)" : "rgba(157, 78, 221, 0.15)";
+            card.style.boxShadow = `inset 0 0 40px ${glowColor}, 0 4px 15px rgba(0,0,0,0.2)`;
+
+            const isPending = reply.processed_status === 'pending_approval';
+
+            let classBadge = "";
+            if (reply.classification === 'interested') classBadge = `<span class="badge" style="background: rgba(56, 176, 0, 0.2); color: #38b000; border: 1px solid #38b000;">Positivo / Interesado</span>`;
+            else if (reply.classification === 'not_interested') classBadge = `<span class="badge" style="background: rgba(255, 90, 95, 0.2); color: var(--danger); border: 1px solid var(--danger);">Rechazo / No Interesado</span>`;
+            else classBadge = `<span class="badge" style="background: rgba(157, 78, 221, 0.2); color: #c77dff; border: 1px solid #c77dff;">${reply.classification}</span>`;
+
+            let statusBadge = isPending ? `<span class="badge bg-warning" style="color:#000;">Requiere Acción</span>` : 
+                              reply.processed_status === 'replied' ? `<span class="badge bg-success">Respondido</span>` : 
+                              `<span class="badge" style="background:rgba(255,255,255,0.1);">${reply.processed_status}</span>`;
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h3 style="margin-bottom: 4px; font-size: 1.1rem; color: #fff;">${reply.subject || 'Sin Asunto'}</h3>
+                        <p class="text-sm" style="color: var(--text-muted);">De: <strong>${reply.from_email}</strong></p>
+                        <div style="margin-top: 8px;">${classBadge}</div>
+                    </div>
+                    <div>
+                        ${statusBadge}
+                        <button class="btn-delete-subtle btn-delete-lead" data-lead-id="${reply.lead_id}" style="margin-left: 12px; font-size: 1rem;" title="Eliminar Lead">🗑️</button>
+                    </div>
                 </div>
+
+                <div style="background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px; font-size: 0.95rem; color: #ddd; white-space: pre-wrap; max-height: 200px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.05);">
+                    ${reply.body || 'Sin contenido'}
+                </div>
+
+                ${isPending ? `
+                <div style="margin-top: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-weight: 600; font-size: 0.9rem; color: #fff; display: flex; align-items: center; gap: 6px;">
+                            Respuesta sugerida:
+                        </span>
+                    </div>
+                    
+                    <input type="text" id="subj-${reply.id}" value="${reply.proposed_subject || 'Re: ' + (reply.subject || '')}" 
+                           style="width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; background: rgba(18, 16, 28, 0.6); color: #fff; outline: none; font-size: 0.9rem;">
+                    
+                    <textarea id="body-${reply.id}" rows="6" 
+                              style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: rgba(18, 16, 28, 0.6); color: #fff; outline: none; font-size: 0.95rem; resize: vertical; line-height: 1.5;">${reply.proposed_reply || ''}</textarea>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 12px;">
+                        <button class="btn btn-secondary btn-dismiss-inline" data-id="${reply.id}">Descartar</button>
+                        <button class="btn btn-primary btn-send-inline" data-id="${reply.id}">Aprobar y Enviar 🚀</button>
+                    </div>
+                </div>
+                ` : ``}
             `;
-            
-            tr.innerHTML = `
-                <td>
-                    <a href="${gmailSearchUrl}" target="_blank" class="inbox-link" title="Responder en Gmail">
-                        ${reply.from_email} ↗
-                    </a>
-                </td>
-                <td>${reply.subject || 'Sin asunto'}</td>
-                <td><span class="badge-status bg-${clsfClass}">${reply.classification}</span></td>
-                <td><span class="badge-status bg-${reply.priority}">${reply.priority}</span></td>
-                <td>${actionHtml}</td>
-            `;
-            tbody.appendChild(tr);
+            feed.appendChild(card);
         });
 
-        // Event listener binding to review buttons
-        tbody.querySelectorAll(".btn-review-reply").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const id = parseInt(btn.getAttribute("data-id"));
-                const reply = currentReplies.find(r => r.id === id);
-                if (reply) {
-                    openApprovalModal(reply.id, reply.from_email, reply.subject, reply.body, reply.proposed_subject, reply.proposed_reply, reply.classification, reply.lead_status);
-                }
-            });
-        });
-
-        // Event listener binding to delete buttons
-        tbody.querySelectorAll(".btn-delete-lead").forEach(btn => {
+        // Event listeners para eliminar
+        feed.querySelectorAll(".btn-delete-lead").forEach(btn => {
             btn.addEventListener("click", () => {
                 const leadId = parseInt(btn.getAttribute("data-lead-id"));
-                if (leadId) {
+                if (leadId && confirm("¿Eliminar este cliente potencial por completo?")) {
                     deleteLead(leadId);
                 }
             });
         });
-    }
 
-    function openApprovalModal(id, fromEmail, subject, body, proposedSubject, proposedReply, classification, leadStatus) {
-        document.getElementById("approval-reply-id").value = id;
-        document.getElementById("approval-original-body").innerText = body || '';
-        document.getElementById("approval-subject").value = proposedSubject || '';
-        document.getElementById("approval-body").value = proposedReply || '';
-        
-        const classificationSelect = document.getElementById("approval-classification");
-        const leadStatusSelect = document.getElementById("approval-lead-status");
-        
-        if (classificationSelect) classificationSelect.value = classification || "unclassified";
-        if (leadStatusSelect) leadStatusSelect.value = leadStatus || "esperando_aprobacion";
-        
-        document.getElementById("modal-reply-approval").style.display = "flex";
-    }
+        // Event listeners para descartar
+        feed.querySelectorAll(".btn-dismiss-inline").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const id = btn.getAttribute("data-id");
+                if (confirm("¿Estás seguro de que quieres descartar esta respuesta e ignorarla?")) {
+                    btn.innerText = "...";
+                    const res = await fetch(`/api/replies/${id}/dismiss`, { method: "POST" });
+                    if (res.ok) fetchReplies();
+                }
+            });
+        });
 
-    // Event listeners para controles de edición manual en modal de aprobación
-    const approvalClassificationSelect = document.getElementById("approval-classification");
-    if (approvalClassificationSelect) {
-        approvalClassificationSelect.addEventListener("change", async () => {
-            const id = document.getElementById("approval-reply-id").value;
-            const classification = approvalClassificationSelect.value;
-            if (!id) return;
-            
-            const subjectInput = document.getElementById("approval-subject");
-            const bodyTextarea = document.getElementById("approval-body");
-            subjectInput.disabled = true;
-            bodyTextarea.disabled = true;
-            subjectInput.value = "⏳ Regenerando propuesta...";
-            bodyTextarea.value = "⏳ Regenerando propuesta con IA...";
-            
-            try {
-                const res = await fetch(`/api/replies/${id}/classification`, {
+        // Event listeners para enviar
+        feed.querySelectorAll(".btn-send-inline").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const id = btn.getAttribute("data-id");
+                const subj = document.getElementById(`subj-${id}`).value;
+                const body = document.getElementById(`body-${id}`).value;
+                
+                if (!subj || !body) {
+                    alert("Asunto y cuerpo son obligatorios.");
+                    return;
+                }
+                
+                btn.innerText = "Enviando...";
+                btn.disabled = true;
+                
+                const res = await fetch(`/api/replies/${id}/approve`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ classification })
+                    body: JSON.stringify({ subject: subj, body: body })
                 });
+                
                 if (res.ok) {
-                    const data = await res.json();
-                    subjectInput.value = data.proposed_subject || "";
-                    bodyTextarea.value = data.proposed_reply || "";
+                    fetchReplies();
+                    fetchMetrics();
                 } else {
-                    alert("Error al actualizar la clasificación de la respuesta.");
+                    alert("Error al enviar.");
+                    btn.innerText = "Aprobar y Enviar 🚀";
+                    btn.disabled = false;
                 }
-            } catch(e) {
-                console.error(e);
-            } finally {
-                subjectInput.disabled = false;
-                bodyTextarea.disabled = false;
-            }
-        });
-    }
-
-    const approvalLeadStatusSelect = document.getElementById("approval-lead-status");
-    if (approvalLeadStatusSelect) {
-        approvalLeadStatusSelect.addEventListener("change", async () => {
-            const id = document.getElementById("approval-reply-id").value;
-            const reply = currentReplies.find(r => r.id == id);
-            const status = approvalLeadStatusSelect.value;
-            if (reply && reply.lead_id) {
-                await fetch(`/api/leads/${reply.lead_id}/status`, {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ status })
-                });
-                fetchReplies();
-                fetchMetrics();
-            }
-        });
-    }
-
-    // Cerrar modal de aprobación
-    document.getElementById("close-modal-reply").addEventListener("click", () => {
-        document.getElementById("modal-reply-approval").style.display = "none";
-    });
-
-    // Descartar propuesta de respuesta
-    document.getElementById("btn-approval-dismiss").addEventListener("click", async () => {
-        const id = document.getElementById("approval-reply-id").value;
-        if (!id) return;
-        
-        if (confirm("¿Estás seguro de que quieres descartar esta respuesta e ignorarla?")) {
-            const res = await fetch(`/api/replies/${id}/dismiss`, { method: "POST" });
-            if (res.ok) {
-                document.getElementById("modal-reply-approval").style.display = "none";
-                fetchReplies();
-                fetchMetrics();
-            } else {
-                alert("Error al descartar la respuesta");
-            }
-        }
-    });
-
-    // Aprobar y enviar respuesta
-    document.getElementById("btn-approval-send").addEventListener("click", async () => {
-        const id = document.getElementById("approval-reply-id").value;
-        const subject = document.getElementById("approval-subject").value;
-        const body = document.getElementById("approval-body").value;
-        
-        if (!id || !subject || !body) {
-            alert("Por favor, completa el asunto y cuerpo del mensaje.");
-            return;
-        }
-        
-        const btn = document.getElementById("btn-approval-send");
-        const originalText = btn.innerText;
-        btn.innerText = "⏳ ENVIANDO...";
-        btn.disabled = true;
-        
-        try {
-            const res = await fetch(`/api/replies/${id}/approve`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ subject, body })
             });
-            
-            if (res.ok) {
-                document.getElementById("modal-reply-approval").style.display = "none";
-                fetchReplies();
-                fetchMetrics();
-            } else {
-                const data = await res.json();
-                alert("Error al enviar la respuesta: " + (data.detail || "Error desconocido"));
-            }
-        } catch(e) {
-            console.error(e);
-            alert("Error de red al enviar la respuesta.");
-        } finally {
-            btn.innerText = originalText;
-            btn.disabled = false;
-        }
-    });
+        });
+    }
 
     // Directorio de Contactados Modal
     const modalContacted = document.getElementById("modal-contacted-leads");
@@ -305,7 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             if (leads.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 20px; color: var(--text-muted);">No hay empresas contactadas aún.</td></tr>`;
-                return;
+                
             }
             
             leads.forEach(lead => {
@@ -447,6 +382,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (settingsSubjectInput) {
         settingsSubjectInput.addEventListener("input", updateEmailPreview);
     }
+    let quill;
+    if (document.getElementById('quill-editor')) {
+        quill = new Quill('#quill-editor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, false] }],
+                    ['bold', 'italic', 'underline'],
+                    ['link', 'blockquote', 'code-block'],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['clean']
+                ]
+            }
+        });
+        quill.on('text-change', function() {
+            updateEmailPreview();
+        });
+    }
+
     if (settingsBodyInput) {
         settingsBodyInput.addEventListener("input", updateEmailPreview);
     }
@@ -457,12 +411,31 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("settings-queue").value = data.search_queue;
         document.getElementById("settings-availability").value = data.availability;
         document.getElementById("settings-meeting-link").value = data.meeting_link || "";
+        document.getElementById("settings-daily-limit").value = data.daily_limit || "80";
+        document.getElementById("settings-schedule-24-7").checked = data.schedule_24_7 === "true";
+        document.getElementById("settings-schedule-start").value = data.schedule_start || "09:00";
+        document.getElementById("settings-schedule-end").value = data.schedule_end || "18:00";
+        
+        if (document.getElementById("settings-gemini-key")) {
+            document.getElementById("settings-gemini-key").value = data.gemini_api_key || "";
+            document.getElementById("settings-gemini-key-sync").value = data.gemini_api_key_sync || "";
+            document.getElementById("settings-smtp-email").value = data.smtp_email || "";
+            document.getElementById("settings-smtp-password").value = data.smtp_password || "";
+            if (document.getElementById("settings-delay-min")) {
+                document.getElementById("settings-delay-min").value = data.delay_min || "120";
+                document.getElementById("settings-delay-max").value = data.delay_max || "300";
+            }
+        }
 
         try {
             const resTemplate = await fetch("/api/settings/template");
             const dataTemplate = await resTemplate.json();
             document.getElementById("settings-template-subject").value = dataTemplate.subject;
-            document.getElementById("settings-template-body").value = dataTemplate.body;
+            if (quill) {
+                quill.root.innerHTML = dataTemplate.body;
+            } else {
+                document.getElementById("settings-template-body").value = dataTemplate.body;
+            }
             updateEmailPreview(); // Actualizar preview inicial
         } catch(e) {
             console.error("Error al cargar plantilla de correo:", e);
@@ -476,15 +449,33 @@ document.addEventListener("DOMContentLoaded", () => {
             const search_queue = document.getElementById("settings-queue").value;
             const availability = document.getElementById("settings-availability").value;
             const meeting_link = document.getElementById("settings-meeting-link").value;
+            const delay_min = document.getElementById("settings-delay-min") ? document.getElementById("settings-delay-min").value : "120";
+            const delay_max = document.getElementById("settings-delay-max") ? document.getElementById("settings-delay-max").value : "300";
+            const daily_limit = document.getElementById("settings-daily-limit").value;
+            const schedule_24_7 = document.getElementById("settings-schedule-24-7").checked ? "true" : "false";
+            const schedule_start = document.getElementById("settings-schedule-start").value;
+            const schedule_end = document.getElementById("settings-schedule-end").value;
+            
+            let gemini_api_key = "";
+            let gemini_api_key_sync = "";
+            let smtp_email = "";
+            let smtp_password = "";
+            
+            if (document.getElementById("settings-gemini-key")) {
+                gemini_api_key = document.getElementById("settings-gemini-key").value;
+                gemini_api_key_sync = document.getElementById("settings-gemini-key-sync").value;
+                smtp_email = document.getElementById("settings-smtp-email").value;
+                smtp_password = document.getElementById("settings-smtp-password").value;
+            }
             
             const template_subject = document.getElementById("settings-template-subject").value;
-            const template_body = document.getElementById("settings-template-body").value;
+            const template_body = quill ? quill.root.innerHTML : document.getElementById("settings-template-body").value;
             
             try {
                 await fetch("/api/settings", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({search_queue, availability, meeting_link})
+                    body: JSON.stringify({search_queue, availability, meeting_link, gemini_api_key, gemini_api_key_sync, smtp_email, smtp_password, delay_min, delay_max, daily_limit, schedule_24_7, schedule_start, schedule_end})
                 });
 
                 await fetch("/api/settings/template", {
@@ -606,9 +597,13 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         // Control dinámico de luces de los agentes en el Dashboard
+        const agentScout = document.getElementById("agent-scout");
+        const agentCloser = document.getElementById("agent-closer");
         const agentPrep = document.getElementById("agent-prep");
-        const agentDev = document.getElementById("agent-dev");
-
+        const agentCeo = document.getElementById("agent-ceo");
+        
+        // Scout status is updated in fetchMetrics
+        
         if (hasScheduled) {
             agentPrep.classList.remove("inactive");
             agentPrep.querySelector(".status-dot").innerText = "Preparando PPTX";
@@ -616,15 +611,7 @@ document.addEventListener("DOMContentLoaded", () => {
             agentPrep.classList.add("inactive");
             agentPrep.querySelector(".status-dot").innerText = "Espera";
         }
-
-        if (hasDemoReady) {
-            agentDev.classList.remove("inactive");
-            agentDev.querySelector(".status-dot").innerText = "Demo Compilada";
-        } else {
-            agentDev.classList.add("inactive");
-            agentDev.querySelector(".status-dot").innerText = "Espera";
-        }
-    }
+    };
 
     window.changeLeadStatus = async function(leadId, newStatus, selectEl = null) {
         if (selectEl) {
@@ -659,6 +646,20 @@ document.addEventListener("DOMContentLoaded", () => {
         } finally {
             btnEl.innerText = originalText;
             btnEl.disabled = false;
+        }
+    };
+
+    window.controlBot = async function(action) {
+        try {
+            const res = await fetch(`/api/bot/${action}`, { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+                console.log(`Bot ${action} success`);
+            } else {
+                console.log(`Bot ${action} returned false`);
+            }
+        } catch(e) {
+            console.error(e);
         }
     };
 
@@ -749,6 +750,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     <p><strong>Bucle de Auto-Aprendizaje:</strong> <span style="color:var(--success)">ACTIVO</span></p>
                     <p style="margin-top:10px; font-size:0.85rem; color:var(--text-muted)">El sistema está corriendo de forma autónoma. Puedes revisar la bitácora para ver qué está aprendiendo la IA de las respuestas recibidas.</p>
                 </div>
+            `;
+        } else if (agentType === 'analyst') {
+            title.innerText = "📈 Agente Analista - Procesamiento NLP";
+            content.innerHTML = `
+                <p><strong>Estado:</strong> Corriendo en Segundo Plano</p>
+                <p>Este agente evalúa el tono y el análisis de sentimiento de los correos entrantes utilizando Modelos de Lenguaje Natural (NLP). Ayuda al Closer a decidir la agresividad del seguimiento.</p>
+            `;
+        } else if (agentType === 'scorer') {
+            title.innerText = "🎯 Agente Calificador - Lead Scoring";
+            content.innerHTML = `
+                <p><strong>Estado:</strong> Corriendo en Segundo Plano</p>
+                <p>Cruza datos de los dominios extraídos y estima el volumen de facturación o "tier" de cada lead. Asigna prioridades altas a empresas consolidadas.</p>
             `;
         } else {
             title.innerText = "Agente en Espera";

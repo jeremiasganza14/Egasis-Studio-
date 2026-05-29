@@ -21,5 +21,5 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
-# Command to run the application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run the application using Render's dynamic PORT
+CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}

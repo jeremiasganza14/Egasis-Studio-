@@ -9,11 +9,13 @@ import datetime
 def send_email(lead_id: int, destinatario: str, asunto: str, cuerpo_html: str, new_status: str = "sent"):
     """Envía el correo y lo registra en la base de datos."""
     
-    # Obtener configuración SMTP (del env por ahora)
-    remitente = os.getenv("SMTP_EMAIL", "")
-    password = os.getenv("SMTP_PASSWORD", "")
+    from database import SessionLocal, get_setting
+    db = SessionLocal()
+    remitente = get_setting(db, "smtp_email", os.getenv("SMTP_EMAIL", ""))
+    password = get_setting(db, "smtp_password", os.getenv("SMTP_PASSWORD", ""))
     smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    db.close()
     
     if not remitente or not password:
         return False, "Credenciales SMTP no configuradas."

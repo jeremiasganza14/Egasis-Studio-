@@ -1,6 +1,6 @@
-from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket, HTTPException
+from fastapi import FastAPI, Depends, BackgroundTasks, WebSocket, WebSocketException, HTTPException, Request, Response, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import engine, Base, SessionLocal, Lead, SentEmail, Reply, Setting, Learning, get_setting, set_setting, db_lock
@@ -18,7 +18,33 @@ from reply_tracker import check_replies
 from pptx_generator import generate_pptx_stream
 from ai_engine import _call_gemini
 
-app = FastAPI(title="Egasis Studio API")
+# Dependencia de autenticación global
+def check_auth(request: Request = None, websocket: WebSocket = None):
+    url = request.url if request else websocket.url
+    if url.path in ["/login", "/api/login"]:
+        return
+    if url.path.startswith("/static"):
+        return
+        
+    db = SessionLocal()
+    app_password = get_setting(db, "app_password", "")
+    db.close()
+    
+    if not app_password:
+        if request and not request.url.path.startswith("/api"):
+            raise HTTPException(status_code=307, headers={"Location": "/login"})
+        return
+        
+    auth_cookie = request.cookies.get("egasis_auth") if request else websocket.cookies.get("egasis_auth")
+    if auth_cookie != app_password:
+        if request and request.url.path.startswith("/api"):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        elif request:
+            raise HTTPException(status_code=307, headers={"Location": "/login"})
+        else:
+            raise WebSocketException(code=1008)
+
+app = FastAPI(title="Egasis Studio API", dependencies=[Depends(check_auth)])
 
 def auto_reply_checker():
     """Bucle en segundo plano para revisar respuestas cada 5 minutos"""
@@ -63,9 +89,33 @@ def get_db():
     finally:
         db.close()
 
+@app.get("/login")
+def serve_login():
+    return FileResponse("static/login.html")
+
+@app.post("/api/login")
+def login(password: str = Form(...), db: Session = Depends(get_db)):
+    app_password = get_setting(db, "app_password", "")
+    if not app_password:
+        # First time setup
+        set_setting(db, "app_password", password)
+        app_password = password
+        
+    if password == app_password:
+        response = RedirectResponse(url="/", status_code=302)
+        response.set_cookie(key="egasis_auth", value=password, httponly=True, max_age=86400*30)
+        return response
+    else:
+        # Volver al login con error
+        return RedirectResponse(url="/login?error=1", status_code=302)
+
 @app.get("/")
 def read_index():
-    return FileResponse("static/index.html")
+    response = FileResponse("static/index.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/api/metrics")
 def get_metrics(db: Session = Depends(get_db)):
@@ -91,9 +141,26 @@ def get_metrics(db: Session = Depends(get_db)):
     }
 
 @app.get("/api/leads")
-def get_leads(db: Session = Depends(get_db), limit: int = 50):
+def get_leads(db: Session = Depends(get_db), limit: int = 1000):
     leads = db.query(Lead).order_by(Lead.id.desc()).limit(limit).all()
     return leads
+
+import re
+
+def clean_email_body(text: str) -> str:
+    """Elimina historiales de correo y firmas largas para mantener el inbox limpio."""
+    if not text: return ""
+    # Cortar en el separador típico de Gmail "El jue, 21 may... escribió:"
+    text = re.split(r'\nEl\s+.*?,\s+.*?\s+escribió:', text, flags=re.IGNORECASE)[0]
+    text = re.split(r'\nOn\s+.*?,\s+.*?\s+wrote:', text, flags=re.IGNORECASE)[0]
+    # Cortar lineas con >
+    lines = text.split('\n')
+    clean_lines = []
+    for line in lines:
+        if line.strip().startswith('>'):
+            continue
+        clean_lines.append(line)
+    return "\n".join(clean_lines).strip()
 
 @app.get("/api/replies")
 def get_replies(db: Session = Depends(get_db)):
@@ -103,6 +170,7 @@ def get_replies(db: Session = Depends(get_db)):
         for r in replies:
             d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
             d["lead_status"] = r.lead.status if r.lead else "replied"
+            d["body"] = clean_email_body(d["body"])
             out.append(d)
     return out
 
@@ -112,6 +180,16 @@ class SettingsRequest(BaseModel):
     search_queue: str
     availability: str
     meeting_link: str
+    gemini_api_key: str = ""
+    gemini_api_key_sync: str = ""
+    smtp_email: str = ""
+    smtp_password: str = ""
+    delay_min: str = "120"
+    delay_max: str = "300"
+    daily_limit: str = "80"
+    schedule_24_7: str = "true"
+    schedule_start: str = "09:00"
+    schedule_end: str = "18:00"
 
 class TemplateRequest(BaseModel):
     subject: str
@@ -123,11 +201,35 @@ def get_agency_settings(db: Session = Depends(get_db)):
     availability = get_setting(db, "availability", "Lunes a las 11:00\nMiércoles a las 16:00")
     meeting_link = get_setting(db, "meeting_link", "https://meet.google.com/xxx-yyyy-zzz")
     current_queue_index = int(get_setting(db, "current_queue_index", "0"))
+    
+    gemini_api_key = get_setting(db, "gemini_api_key", os.getenv("GEMINI_API_KEY", ""))
+    gemini_api_key_sync = get_setting(db, "gemini_api_key_sync", "")
+    smtp_email = get_setting(db, "smtp_email", os.getenv("SMTP_EMAIL", ""))
+    smtp_password = get_setting(db, "smtp_password", os.getenv("SMTP_PASSWORD", ""))
+    
+    delay_min = get_setting(db, "delay_min", "120")
+    delay_max = get_setting(db, "delay_max", "300")
+    
+    daily_limit = get_setting(db, "daily_limit", os.getenv("DAILY_LIMIT", "80"))
+    schedule_24_7 = get_setting(db, "schedule_24_7", "true")
+    schedule_start = get_setting(db, "schedule_start", "09:00")
+    schedule_end = get_setting(db, "schedule_end", "18:00")
+    
     return {
         "search_queue": search_queue,
         "availability": availability,
         "meeting_link": meeting_link,
-        "current_queue_index": current_queue_index
+        "current_queue_index": current_queue_index,
+        "gemini_api_key": gemini_api_key,
+        "gemini_api_key_sync": gemini_api_key_sync,
+        "smtp_email": smtp_email,
+        "smtp_password": smtp_password,
+        "delay_min": delay_min,
+        "delay_max": delay_max,
+        "daily_limit": daily_limit,
+        "schedule_24_7": schedule_24_7,
+        "schedule_start": schedule_start,
+        "schedule_end": schedule_end
     }
 
 @app.post("/api/settings")
@@ -135,6 +237,16 @@ def save_agency_settings(req: SettingsRequest, db: Session = Depends(get_db)):
     set_setting(db, "search_queue", req.search_queue)
     set_setting(db, "availability", req.availability)
     set_setting(db, "meeting_link", req.meeting_link)
+    set_setting(db, "gemini_api_key", req.gemini_api_key)
+    set_setting(db, "gemini_api_key_sync", req.gemini_api_key_sync)
+    set_setting(db, "smtp_email", req.smtp_email)
+    set_setting(db, "smtp_password", req.smtp_password)
+    set_setting(db, "delay_min", req.delay_min)
+    set_setting(db, "delay_max", req.delay_max)
+    set_setting(db, "daily_limit", req.daily_limit)
+    set_setting(db, "schedule_24_7", req.schedule_24_7)
+    set_setting(db, "schedule_start", req.schedule_start)
+    set_setting(db, "schedule_end", req.schedule_end)
     return {"message": "Configuración guardada correctamente"}
 
 @app.get("/api/settings/template")
@@ -1028,11 +1140,15 @@ def start_scraper(req: ScraperRequest, background_tasks: BackgroundTasks):
 @app.post("/api/bot/start")
 def start_bot_endpoint():
     res = start_bot()
+    from logger import wlog
+    wlog("[SYSTEM] ▶ Sistema de fondo REANUDADO manualmente.")
     return {"message": "Bot iniciado", "success": res}
 
 @app.post("/api/bot/stop")
 def stop_bot_endpoint():
     res = stop_bot()
+    from logger import wlog
+    wlog("[SYSTEM] ⏸ Sistema de fondo PAUSADO manualmente.")
     return {"message": "Bot detenido", "success": res}
 
 @app.websocket("/ws/logs")
@@ -1076,20 +1192,26 @@ def approve_reply(reply_id: int, req: ApproveReplyRequest, db: Session = Depends
     try:
         from sender import send_email
         from logger import wlog
+        # Formatear el texto plano a HTML agregando <br> si es necesario
+        final_body = req.body
+        if "<p>" not in final_body and "<br>" not in final_body:
+            final_body = req.body.replace("\n", "<br>")
+
         # Enviar el email usando el subject y body aprobados por el usuario
-        send_email(lead.id, reply.from_email, req.subject, req.body, new_status=None)
+        send_email(lead.id, reply.from_email, req.subject, final_body, new_status=None)
         
-        # Actualizar estado del lead según el tipo de clasificación
-        if reply.classification == "interested":
-            # Si el correo contiene palabras de confirmación o sala de Meet
-            if "Confirmada" in req.subject or "confirmada" in req.subject or "meet.google.com" in req.body:
-                lead.status = "agendado"
-            else:
-                lead.status = "negociando_horario"
+        # Obtener enlace de reunión de configuración
+        meeting_link = get_setting(db, "meeting_link", "meet.google.com")
+        
+        # Actualizar estado del lead asegurando que siga visible en "Reuniones"
+        if meeting_link.strip() and meeting_link.strip() in final_body:
+            lead.status = "agendado"
+        elif reply.classification in ["interested", "info_requested", "unclassified"]:
+            lead.status = "negociando_horario"
         elif reply.classification == "not_interested":
             lead.status = "rechazado"
         else:
-            lead.status = "replied"
+            lead.status = "negociando_horario"
             
         reply.processed_status = "replied"
         reply.proposed_reply = req.body

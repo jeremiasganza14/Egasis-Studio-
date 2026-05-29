@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Egasis Studio - Lead Gen SaaS</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=5">
+    <link rel="stylesheet" href="/static/css/styles.css?v=10">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -87,11 +89,17 @@
                         <p>Diseña Call Briefs y PowerPoints.</p>
                         <span class="status-dot">Espera</span>
                     </div>
-                    <div class="agent-card glass-panel inactive" id="agent-dev" onclick="openAgentModal('dev')" style="cursor:pointer;">
-                        <div class="agent-icon">💻</div>
-                        <h4>Agente Desarrollador</h4>
-                        <p>Estructura código y maquetas.</p>
-                        <span class="status-dot">Espera</span>
+                    <div class="agent-card glass-panel" id="agent-analyst" onclick="openAgentModal('analyst')" style="cursor:pointer;">
+                        <div class="agent-icon">📈</div>
+                        <h4>Agente Analista</h4>
+                        <p>Analiza el sentimiento de respuestas.</p>
+                        <span class="status-dot">Activo en 2do Plano</span>
+                    </div>
+                    <div class="agent-card glass-panel" id="agent-scorer" onclick="openAgentModal('scorer')" style="cursor:pointer;">
+                        <div class="agent-icon">🎯</div>
+                        <h4>Agente Calificador</h4>
+                        <p>Evalúa y filtra leads por facturación.</p>
+                        <span class="status-dot">Activo en 2do Plano</span>
                     </div>
                     <div class="agent-card glass-panel" id="agent-ceo" onclick="openAgentModal('ceo')" style="cursor:pointer;">
                         <div class="agent-icon">👑</div>
@@ -116,7 +124,13 @@
 
                 <!-- TERMINAL EN VIVO -->
                 <div class="terminal-wrapper mt-4">
-                    <h2>Terminal en Vivo</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="margin: 0;">Terminal en Vivo</h2>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary btn-sm" id="btn-start-bot" onclick="controlBot('start')" style="background: rgba(0, 245, 212, 0.2); border: 1px solid var(--secondary); color: var(--secondary); font-weight: bold;">▶ Iniciar Sistema</button>
+                            <button class="btn btn-danger btn-sm" id="btn-stop-bot" onclick="controlBot('stop')" style="background: rgba(255, 90, 95, 0.2); border: 1px solid var(--danger); color: var(--danger); font-weight: bold;">⏸ Pausar</button>
+                        </div>
+                    </div>
                     <div class="terminal-box mt-2" id="terminal-output">
                         <div class="log-line">Esperando comandos para iniciar...</div>
                     </div>
@@ -126,27 +140,17 @@
             <!-- INBOX SECTION -->
             <section id="inbox" class="view-section" style="display: none;">
                 <header>
-                    <h1>Inbox Clasificado por IA</h1>
-                    <p>Monitoreo inteligente de correos recibidos y su clasificación automática.</p>
+                    <h1>Inbox Inteligente</h1>
+                    <p>Monitoreo 24/7 de tus clientes potenciales y redacción de respuestas con Inteligencia Artificial.</p>
                 </header>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h2>Respuestas Recientes</h2>
+                    <h2>Bandeja de Entrada</h2>
                     <button id="btn-sync-inbox" class="btn btn-secondary">🔄 SINCRONIZAR GMAIL</button>
                 </div>
-                <div class="glass-panel mt-2 p-0 table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>De</th>
-                                <th>Asunto</th>
-                                <th>Clasificación</th>
-                                <th>Prioridad</th>
-                                <th>Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="replies-tbody">
-                        </tbody>
-                    </table>
+                
+                <!-- Contenedor de Tarjetas (Feed) -->
+                <div id="replies-feed" style="display: flex; flex-direction: column; gap: 24px;">
+                    <!-- Las tarjetas se inyectarán aquí por JS -->
                 </div>
             </section>
 
@@ -228,6 +232,32 @@
                                 <input type="text" id="settings-meeting-link" style="width: 100%; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(18, 16, 28, 0.4); color: #fff; outline: none; font-size: 0.95rem;" placeholder="https://meet.google.com/xxx-yyyy-zzz">
                             </div>
 
+                            <div class="glass-panel p-4" style="background: rgba(30, 20, 50, 0.3); border: 1px solid rgba(255,255,255,0.05); margin-bottom: 24px;">
+                                <h3 style="color: var(--primary); font-size: 1.1rem; margin-bottom: 16px;">⏱️ Control de Envíos y Horarios</h3>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label for="settings-daily-limit" style="font-size: 0.9rem;">Límite Diario de Correos</label>
+                                        <input type="number" id="settings-daily-limit" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(18, 16, 28, 0.6); color: #fff; outline: none; font-size: 0.95rem;" placeholder="80">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0; display:flex; align-items:center; gap:8px;">
+                                        <input type="checkbox" id="settings-schedule-24-7" style="width:20px; height:20px; accent-color: var(--primary);">
+                                        <label for="settings-schedule-24-7" style="font-size: 0.9rem; margin-bottom:0; cursor:pointer;">Enviar 24/7 sin límite de horario</label>
+                                    </div>
+                                </div>
+
+                                <div id="schedule-times-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label for="settings-schedule-start" style="font-size: 0.9rem;">Hora de Inicio (Ej. 09:00)</label>
+                                        <input type="time" id="settings-schedule-start" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(18, 16, 28, 0.6); color: #fff; outline: none; font-size: 0.95rem;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label for="settings-schedule-end" style="font-size: 0.9rem;">Hora de Fin (Ej. 18:00)</label>
+                                        <input type="time" id="settings-schedule-end" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(18, 16, 28, 0.6); color: #fff; outline: none; font-size: 0.95rem;">
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="form-group">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                                     <label for="settings-template-subject" style="margin-bottom:0;">Asunto del Correo (Spintax & Variables)</label>
@@ -247,8 +277,42 @@
                                         <button type="button" class="btn-insert-tag" data-target="settings-template-body" data-val="{Empresa}" style="background: rgba(0, 245, 212, 0.15); border: 1px solid var(--secondary); color:#00f5d4; padding: 2px 8px; font-size: 0.7rem; border-radius: 4px; cursor: pointer; font-weight:600;">+ Empresa</button>
                                     </div>
                                 </div>
-                                <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">Plantilla HTML base del correo en frío. Admite variables como <code>{Nombre}</code> y <code>{Empresa}</code>.</p>
-                                <textarea id="settings-template-body" style="height: 250px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;" placeholder="Cuerpo HTML..."></textarea>
+                                <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">Plantilla HTML base del primer correo en frío. (Usa el editor visual. Admite variables como {Nombre} y {Empresa}).</p>
+                                <div id="quill-editor" style="background-color: #ffffff; color: #000000; height: 300px; border-radius: 8px;"></div>
+                                <input type="hidden" id="settings-template-body">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Pausa Anti-Spam entre Envíos (Segundos)</label>
+                                <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">Tiempo de espera aleatorio (mínimo y máximo) entre cada correo para simular comportamiento humano.</p>
+                                <div style="display: flex; gap: 16px;">
+                                    <input type="number" id="settings-delay-min" style="width: 50%; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(18, 16, 28, 0.4); color: #fff; outline: none; font-size: 0.95rem;" placeholder="Min (Ej: 60)" value="120">
+                                    <input type="number" id="settings-delay-max" style="width: 50%; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(18, 16, 28, 0.4); color: #fff; outline: none; font-size: 0.95rem;" placeholder="Max (Ej: 180)" value="300">
+                                </div>
+                            </div>
+
+                            <hr style="border-color: var(--border); margin: 20px 0;">
+
+                            <h3 style="margin-bottom: 15px; color: var(--secondary);">Credenciales y API Keys</h3>
+                                <div class="form-group">
+                                    <label for="settings-gemini-key">API Key de Gemini (Prospección Automática)</label>
+                                    <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">Puedes poner múltiples Keys separadas por comas (ej. key1,key2) para evadir los límites de velocidad.</p>
+                                    <input type="password" id="settings-gemini-key" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(18, 16, 28, 0.6); color: #fff; outline: none; font-size: 0.95rem;">
+                                </div>
+                                <div class="form-group">
+                                    <label for="settings-gemini-key-sync">API Key de Gemini (Sincronización Inbox)</label>
+                                    <p class="text-sm mb-2" style="color: var(--text-muted); font-size: 0.85rem;">Clave dedicada exclusivamente para leer y responder correos. Si la dejas vacía, se usará la de arriba.</p>
+                                    <input type="password" id="settings-gemini-key-sync" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(18, 16, 28, 0.6); color: #fff; outline: none; font-size: 0.95rem;">
+                                </div>
+                            
+                            <div class="form-group">
+                                <label for="settings-smtp-email">Correo para Enviar Mails (Ej. tu@gmail.com)</label>
+                                <input type="email" id="settings-smtp-email" style="width: 100%; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(18, 16, 28, 0.4); color: #fff; outline: none; font-size: 0.95rem;">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="settings-smtp-password">Contraseña de Aplicación de Gmail (16 letras)</label>
+                                <input type="password" id="settings-smtp-password" style="width: 100%; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(18, 16, 28, 0.4); color: #fff; outline: none; font-size: 0.95rem;">
                             </div>
 
                             <button id="btn-save-settings" class="btn btn-primary" style="width: 100%;">GUARDAR CONFIGURACIÓN</button>
@@ -299,67 +363,8 @@
         </div>
     </div>
 
-    <!-- Modal Aprobación de Respuesta (Copiloto) -->
-    <div id="modal-reply-approval" class="custom-modal-overlay" style="display: none;">
-        <div class="glass-panel custom-modal-content" style="max-width: 700px;">
-            <button class="custom-modal-close" id="close-modal-reply">✕</button>
-            <h2 style="margin-bottom: 10px; font-weight: 800; background: linear-gradient(90deg, #fff, #00f5d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Aprobación de Respuesta IA</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Revisa y edita la respuesta propuesta por Egasis antes de que sea enviada.</p>
-            
-            <div class="glass-panel p-4 mb-4" style="background: rgba(9, 8, 14, 0.4); border-color: rgba(255,255,255,0.05);">
-                <div style="font-weight: 600; font-size: 0.85rem; color: var(--primary); margin-bottom: 4px;">Mensaje Recibido del Prospecto:</div>
-                <div id="approval-original-body" style="font-size: 0.9rem; max-height: 150px; overflow-y: auto; white-space: pre-wrap; color: var(--text-muted); padding: 8px 0;">
-                    Cargando mensaje...
-                </div>
-            </div>
 
-            <input type="hidden" id="approval-reply-id">
 
-            <!-- Controles de Clasificación y Estado -->
-            <div style="display: flex; gap: 16px; margin-bottom: 20px;">
-                <div class="modal-form-group" style="flex: 1; margin-bottom: 0;">
-                    <label for="approval-classification" style="display:block; margin-bottom:6px; font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">Clasificación de IA</label>
-                    <select id="approval-classification" style="width: 100%; padding: 12px; background: rgba(9, 8, 14, 0.6); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); outline: none; font-size:0.9rem; cursor:pointer;">
-                        <option value="interested">Interesado</option>
-                        <option value="info_requested">Pide Información</option>
-                        <option value="not_interested">No Interesado</option>
-                        <option value="unsubscribe">Baja / Desuscribir</option>
-                        <option value="out_of_office">Fuera de la Oficina</option>
-                        <option value="spam">Spam / Publicitario</option>
-                        <option value="unclassified">Sin Clasificar</option>
-                    </select>
-                </div>
-                <div class="modal-form-group" style="flex: 1; margin-bottom: 0;">
-                    <label for="approval-lead-status" style="display:block; margin-bottom:6px; font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase;">Estado del Lead</label>
-                    <select id="approval-lead-status" style="width: 100%; padding: 12px; background: rgba(9, 8, 14, 0.6); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); outline: none; font-size:0.9rem; cursor:pointer;">
-                        <option value="esperando_aprobacion">Espera Aprobación</option>
-                        <option value="negociando_horario">Negociando Horario</option>
-                        <option value="agendado">Reunión Agendada</option>
-                        <option value="listo_para_demo">Listo para Demo</option>
-                        <option value="rechazado">Rechazado</option>
-                        <option value="do_not_contact">No Contactar</option>
-                        <option value="replied">Respondido</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="modal-form-group">
-                <label for="approval-subject">Asunto del Correo de Respuesta</label>
-                <input type="text" id="approval-subject" placeholder="Ej. Re: Cita de demostración">
-            </div>
-
-            <div class="modal-form-group">
-                <label for="approval-body">Cuerpo del Correo a Enviar</label>
-                <textarea id="approval-body" rows="8" placeholder="Escribe el cuerpo de tu respuesta aquí..."></textarea>
-            </div>
-
-            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
-                <button id="btn-approval-dismiss" class="btn btn-danger" style="background: rgba(255, 90, 95, 0.2); color: var(--danger); border: 1px solid var(--danger);">🗑️ DESCARTAR / IGNORAR</button>
-                <button id="btn-approval-send" class="btn btn-secondary">🚀 APROBAR Y ENVIAR</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="/static/js/dashboard.js?v=5"></script>
+    <script src="/static/js/dashboard.js?v=9"></script>
 </body>
 </html>

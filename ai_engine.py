@@ -21,10 +21,28 @@ def process_spintax(text: str) -> str:
         text = text[:match.start()] + choice + text[match.end():]
     return text
 
-def _call_gemini(prompt: str) -> str:
+def _call_gemini(prompt: str, purpose: str = "prospecting") -> str:
     try:
+        from database import SessionLocal, get_setting
+        db = SessionLocal()
+        setting_key = "gemini_api_key_sync" if purpose == "sync" else "gemini_api_key"
+        key_str = get_setting(db, setting_key, os.getenv("GEMINI_API_KEY", ""))
+        
+        # Si la key de sync está vacía, hacemos fallback a la principal
+        if not key_str and purpose == "sync":
+            key_str = get_setting(db, "gemini_api_key", os.getenv("GEMINI_API_KEY", ""))
+            
+        db.close()
+        
+        # Soportar múltiples API keys separadas por comas para evadir el límite de velocidad
+        keys = [k.strip() for k in key_str.split(",") if k.strip()]
+        if not keys:
+            return ""
+        
+        key = random.choice(keys)
+        
         from google import genai
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = genai.Client(api_key=key)
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
@@ -36,8 +54,13 @@ def _call_gemini(prompt: str) -> str:
 
 def _call_openai(prompt: str) -> str:
     try:
+        from database import SessionLocal, get_setting
+        db = SessionLocal()
+        key = get_setting(db, "openai_api_key", os.getenv("OPENAI_API_KEY", ""))
+        db.close()
+        
         from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        client = OpenAI(api_key=key)
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
@@ -62,11 +85,38 @@ def extract_learning_from_reply(reply_body: str, company: str, classification: s
     Ejemplo si es positiva: "Aprecian que mencione la integración con WhatsApp. Mantener este foco."
     """
     res = ""
-    if AI_PROVIDER == "openai" and OPENAI_API_KEY:
+    if AI_PROVIDER == "openai":
         res = _call_openai(prompt)
-    elif AI_PROVIDER == "gemini" and GEMINI_API_KEY:
-        res = _call_gemini(prompt)
+    elif AI_PROVIDER == "gemini":
+        res = _call_gemini(prompt, purpose="sync")
     return res.strip() if res else ""
+
+def generate_custom_reply_draft(email_body: str, company: str, classification: str, availability: str = "") -> str:
+    """Genera un borrador de respuesta inteligente usando IA, basándose en lo que escribió el prospecto."""
+    prompt = f"""
+    Eres un experto cerrador de ventas B2B. El prospecto de la empresa {company} nos acaba de responder a nuestro correo en frío.
+    La respuesta ha sido clasificada como: {classification}.
+    
+    Mensaje del prospecto:
+    "{email_body}"
+    
+    Por favor, redacta un borrador de respuesta. 
+    - Sé muy cortés, breve y persuasivo.
+    - Responde a sus dudas si hizo preguntas.
+    - Si muestran interés o piden info, ofréceles una breve llamada.
+    - Opciones de disponibilidad para la llamada: {availability}
+    - Firma solo como "Saludos cordiales".
+    - Devuelve SOLAMENTE el texto plano. NO uses ninguna etiqueta HTML (ni <p>, ni <br>, ni <b>, etc). Solo texto puro separado por saltos de línea normales. No incluyas asunto ni texto adicional.
+    """
+    res = ""
+    if AI_PROVIDER == "openai":
+        res = _call_openai(prompt)
+    elif AI_PROVIDER == "gemini":
+        res = _call_gemini(prompt, purpose="sync")
+        
+    if res:
+        res = re.sub(r'```[a-z]*', '', res).strip()
+    return res
 
 def generate_ai_variant(base_template: str, company_name: str, contact_name: str, past_learnings: list = None) -> str:
     """Usa IA para reescribir la plantilla sutilmente para que suene natural, 
@@ -97,9 +147,9 @@ def generate_ai_variant(base_template: str, company_name: str, contact_name: str
     Reescritura:
     """
     
-    if AI_PROVIDER == "openai" and OPENAI_API_KEY:
+    if AI_PROVIDER == "openai":
         res = _call_openai(prompt)
-    elif AI_PROVIDER == "gemini" and GEMINI_API_KEY:
+    elif AI_PROVIDER == "gemini":
         res = _call_gemini(prompt)
     else:
         res = texto_personalizado
@@ -141,10 +191,10 @@ def classify_reply(email_body: str) -> tuple[str, str]:
     """
     
     res = ""
-    if AI_PROVIDER == "openai" and OPENAI_API_KEY:
+    if AI_PROVIDER == "openai":
         res = _call_openai(prompt)
-    elif AI_PROVIDER == "gemini" and GEMINI_API_KEY:
-        res = _call_gemini(prompt)
+    elif AI_PROVIDER == "gemini":
+        res = _call_gemini(prompt, purpose="sync")
         
     # Limpieza robusta de la respuesta de la IA
     if res:
